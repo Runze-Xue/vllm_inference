@@ -1,0 +1,145 @@
+(vllm) xuerunze@sdu-SYS-4029GP-TRT:/home/share/xuerunze/node$ codex
+╭───────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.117.0)            │
+│                                       │
+│ model:     gpt-5.4   /model to change │
+│ directory: /home/share/xuerunze/node  │
+
+› 我希望找一份大厂大模型推理部署、加速相关工作。我正在进行vllm推理模型部署，在文件夹
+  vllm_inference中，我已经实现了一部分操作，请你读取我的代码，并告诉我我之后应该做那些
+  └ List vllm_inference
+    List vllm_inference
+
+• Ran pwd
+  └ /home/share/xuerunze/node
+
+• Ran find .. -type d -name vllm_inference 2>/dev/null
+  └ ../vllm_inference
+
+• Ran find /home/share/xuerunze -type d -name vllm_inference 2>/dev/null
+  └ /home/share/xuerunze/vllm_inference
+• Waited for background terminal
+
+───────────────────────────────────────────────────────────────────────────────────────
+
+• 已经定位到目录 /home/share/xuerunze/vllm_inference。接下来我会读关键文件，判断你目前
+  覆盖了哪些能力：基础推理、服务化、压测、监控、并行/量化/调度这几块做到什么程度。
+
+• Explored
+  └ List vllm_inference
+    List vllm_inference
+
+• Ran git -C /home/share/xuerunze/vllm_inference status --short
+  └ (no output)
+
+• Explored
+  └ List vllm_inference
+    Read Readme.md, serve.sh, control.sh, client.py, quickstart.py, test_chat.sh,
+         test_models.sh, download.py, vllm_2026-03-31_06-55-20.log, vllm_2026-03-31_06-
+49-
+         21.log
+
+───────────────────────────────────────────────────────────────────────────────────────
+
+• 代码量不大，但已经能看出主线了：你完成了本地模型加载、OpenAI 兼容接口调用、后台服务启
+  动和最基础的 API 验证。现在我再补一轮细看，主要找你当前实现里的短板和它们对应的下一步
+  工程项。
+
+• Explored
+  └ Read serve.sh, quickstart.py, client.py, Readme.md, test_chat.sh, test_models.sh,
+         download.py
+
+───────────────────────────────────────────────────────────────────────────────────────
+
+• 我已经把关键脚本和日志串起来了。你的项目现在更像“单机单卡 vLLM 跑通 demo”，离“推理部
+  署/加速工程项目”还差 benchmark、配置化、可运维、可复现实验 这几层。
+
+• Explored
+  └ Read vllm.pid, vllm_2026-03-31_06-55-20.log
+
+• Ran ps -fp $(cat /home/share/xuerunze/vllm_inference/run/vllm.pid)
+  └ UID          PID    PPID  C STIME TTY          TIME CMD
+
+───────────────────────────────────────────────────────────────────────────────────────
+
+• 我看完了，你现在已经完成了一个最小可用闭环：本地模型加载、vllm serve 启动、OpenAI 兼
+  容接口调用、curl 验证都已经跑通了。按求职视角看，这说明你已经有“会把模型服务拉起来”的
+  基础，但离“大厂大模型推理部署/加速”还差一段，主要差在工程化、性能验证、可运维和加速实
+  验设计。
+
+  先说当前代码里最值得优先处理的问题
+
+  1. stop/restart 能力缺失，而且当前 PID 文件已经失真。你在 /home/share/xuerunze/
+     vllm_inference/Readme.md:31 写了只能手动 kill -9，[control.sh](/home/share/
+     xuerunze/vllm_inference/control.sh) 还是空文件；同时 run/vllm.pid 记录的 1416288
+     进程已经不存在。这意味着服务管理还不可靠。
+  2. 配置全部硬编码，无法做系统化实验。/home/share/xuerunze/vllm_inference/serve.sh:11
+     里把 GPU、模型路径、端口、gpu-memory-utilization、max-model-len 全写死了；/home/
+     share/xuerunze/vllm_inference/quickstart.py:2 还单独写死了另一张卡。这样很难做“同
+     一套脚本切换模型/显卡/参数”的 benchmark。
+  3. 还没有 benchmark 体系。日志里能看到一次启动耗时大约 30.69s，单次请求吞吐只有
+     prompt 2.6 tok/s、generation 2.1 tok/s，但你没有形成正式的压测脚本、指标表、对比实
+     验，所以现在还不能证明“部署优化能力”。
+  4. 项目目标写到了 “模型推理加速 + KV-Cache 优化”，但代码里还没有对应实验。/home/
+     share/xuerunze/vllm_inference/serve.sh 目前只是默认参数单卡跑通；没有围绕 prefix
+     caching、chunked prefill、并发、长上下文、量化、不同 batch/不同 prompt length 做分
+     析。
+  5. 有路径不一致风险。/home/share/xuerunze/vllm_inference/Readme.md:11、/home/share/
+     xuerunze/vllm_inference/serve.sh:11、/home/share/xuerunze/vllm_inference/
+     quickstart.py:8 用的是 LLM_models，但 /home/share/xuerunze/vllm_inference/
+     download.py:5 写的是 LLM_Models。Linux 区分大小写，这种问题后面很容易踩坑。
+  6. /home/share/xuerunze/vllm_inference/quickstart.py:12 的注释写了“逐步降低显存占用重
+     试”，但实际代码没有重试逻辑，只是固定 util = 0.2。这类“注释和实现不一致”在面试里容
+     易被追问。
+
+  你后面应该做什么
+
+  第一阶段，先把它从 demo 提升成“可复现实验平台”。
+
+  - 实现 control.sh 的 start|stop|restart|status|logs。
+  - 把模型路径、GPU、端口、max_model_len、gpu_memory_utilization、tensor_parallel_size
+    做成环境变量或配置文件。
+  - README 补成标准工程文档：环境、启动、停止、常见问题、实验参数说明。
+  - 增加健康检查：/health、/v1/models、简单推理 smoke test。
+
+  第二阶段，补性能测试，这是最关键的求职资产。
+
+  - 写压测脚本，至少统计：TTFT、TPOT、吞吐量、并发下的 P50/P95 延迟、显存占用。
+  - 设计对比实验，不要只跑一次。
+  - 最少做这几组：
+      1. 不同 max_model_len
+      2. 不同 prompt 长度
+      3. 不同并发数
+      4. 开关 prefix caching
+      5. 小模型和中等模型对比
+  - 最终产出一张表和几张图，这比代码本身更像“大厂部署/加速”项目。
+
+  第三阶段，开始做真正的“推理加速”。
+
+  - 量化：尝试 AWQ/GPTQ 或 vLLM 支持的量化方式，对比吞吐、延迟、显存、效果损失。
+  - 并行：如果机器条件允许，做 tensor parallel 多卡部署。
+  - 长上下文：研究 max_model_len 提升后 KV cache 的显存影响。
+  - 前缀复用：构造共享 system prompt / 长前缀场景，测 prefix cache 命中收益。
+  - 冷启动优化：记录模型加载、compile、graph capture 各阶段耗时，讨论如何缩短首启时间。
+
+  第四阶段，补“可观测性”和“面试表达”。
+
+  - 抓 /metrics，接 Prometheus 指标，哪怕先只做文本采集也行。
+  - 每次实验固定记录：模型、GPU、参数、样本规模、结果。
+  - 把项目沉淀成一份像样的项目说明：问题背景、实验设计、关键结论、优化收益、局限性。
+
+  我建议你的具体下一步顺序
+
+  1. 先补 control.sh 和配置化，解决服务管理混乱。
+  2. 写一个 benchmark 脚本，先把 TTFT、吞吐、显存数据跑出来。
+  3. 用同一套脚本做 3 到 5 组参数对比实验。
+  4. 再引入量化或多卡并行，形成“优化前后”结果。
+  5. 最后整理成 README + 实验报告，面试时直接讲。
+
+  如果你愿意，我下一步可以直接帮你把这个项目补成第一版工程化结构，优先做这三件事：
+
+  1. 完整的 control.sh
+  2. 配置化 serve.sh
+  3. 自动 benchmark 脚本和 README 重写
+
+  这样你这个仓库会立刻从“练手脚本”变成“能展示给面试官的项目”。

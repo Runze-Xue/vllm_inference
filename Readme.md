@@ -28,9 +28,13 @@ bash test_chat.sh <br>
 bash test_models.sh <br>
 python quickstart.py<br>
 
+测试指标：<br>
+1、TTFT(Time to first token)：<br>
+从请求发出到收到第一个token的时间，包括排队时延+prefill+网络时延。
+
+
 ## 五、怎么停止
 目前不能自动停止，需要nvidia-smi找到相应占用GPU的进程，然后手动 kill -9 PID
 
 ## 六、报错记录
 1、vllm 配置时要用 `uv`配置，可以在conda中配置，但一定要用`uv`配置！
-
